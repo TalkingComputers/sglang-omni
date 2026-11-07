@@ -539,6 +539,11 @@ class StreamingSimpleScheduler:
             else:
                 pass
         except Exception as exc:
+            logger.exception(
+                "%s batch failed for %s",
+                self.__class__.__name__,
+                [msg.request_id for msg in valid],
+            )
             for msg in valid:
                 if not self.is_aborted(msg.request_id):
                     self.emit_error(msg.request_id, exc)

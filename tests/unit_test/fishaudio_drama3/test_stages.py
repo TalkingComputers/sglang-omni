@@ -475,6 +475,34 @@ def test_the_padded_frame_limit_is_the_share_left_after_held_memory() -> None:
 
 
 @pytest.mark.accelerator
+def test_the_padded_frame_limit_is_the_allocator_cap_left_after_held_memory() -> None:
+    device = torch.device("cuda", torch.cuda.current_device())
+    bytes_per_frame = 4096
+    cap_bytes = int(0.01 * torch.cuda.get_device_properties(device).total_memory)
+    entry_fraction = torch.cuda.get_per_process_memory_fraction(device)
+    torch.cuda.set_per_process_memory_fraction(0.01, device)
+    try:
+        torch.cuda.empty_cache()
+        held_before = torch.cuda.memory_reserved(device)
+        max_padded_frames_per_decode = stages.measure_max_padded_frames_per_decode(
+            bytes_per_frame_decoder(bytes_per_frame),
+            device=device,
+            num_codebooks=4,
+            total_gpu_memory_fraction=None,
+            max_new_tokens=16,
+        )
+        held_after = torch.cuda.memory_reserved(device)
+    finally:
+        torch.cuda.set_per_process_memory_fraction(entry_fraction, device)
+
+    assert (
+        (cap_bytes - held_after) // bytes_per_frame
+        <= max_padded_frames_per_decode
+        <= (cap_bytes - held_before) // bytes_per_frame
+    )
+
+
+@pytest.mark.accelerator
 def test_a_share_that_cannot_hold_one_longest_request_is_refused() -> None:
     with pytest.raises(ValueError, match="--vocoder.gpu_memory_fraction"):
         stages.measure_max_padded_frames_per_decode(
