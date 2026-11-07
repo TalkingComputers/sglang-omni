@@ -244,6 +244,12 @@ def measure_max_padded_frames_per_decode(
         share_bytes = device_bytes
     else:
         share_bytes = int(total_gpu_memory_fraction * device_bytes)
+    # note: a declared total_reserve_bytes caps this process's allocator; batches
+    # sized past the cap would run the vocoder out of memory (as in #3129).
+    cap_fraction = device_module.get_per_process_memory_fraction(
+        device_module.current_device() if device.index is None else device
+    )
+    share_bytes = min(share_bytes, int(cap_fraction * device_bytes))
     max_padded_frames_per_decode = (share_bytes - held_bytes) // bytes_per_padded_frame
     if max_padded_frames_per_decode < max_new_tokens:
         raise ValueError(
@@ -251,7 +257,8 @@ def measure_max_padded_frames_per_decode(
             f"{held_bytes / 2**30:.2f} GiB of codec weights and CUDA graphs and "
             f"leaves room for {max_padded_frames_per_decode} padded frames per "
             f"decode, fewer than one request of max_new_tokens={max_new_tokens} "
-            f"frames; raise --vocoder.gpu_memory_fraction or lower "
+            f"frames; raise --vocoder.gpu_memory_fraction or "
+            f"--vocoder.total_reserve_bytes, or lower "
             f"--tts_engine.factory.max_new_tokens"
         )
     else:

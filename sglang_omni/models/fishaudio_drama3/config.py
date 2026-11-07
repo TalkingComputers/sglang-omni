@@ -168,6 +168,8 @@ class Drama3PipelineConfig(PipelineConfig):
             gpu_memory_fraction=VOCODER_GPU_MEMORY_FRACTION,
             terminal=True,
             can_accept_stream_before_payload=True,
+            # note: ragged non-streaming batches fragment the allocator (1.5-4.1 GiB reserved but unallocated on an H100 under a 16 GiB total_reserve_bytes cap), so only this process opts in, as the MiniCPM-o vocoder does.
+            env={"PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"},
         ),
     ]
 
